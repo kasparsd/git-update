@@ -42,12 +42,25 @@ class GitUpdate {
 
 		foreach ( $all_plugins_themes as $item => $item_details )
 			if ( ! empty( $item_details['GitHub URI'] ) )
-				$to_check[ $item ] = wp_remote_get( 
-						sprintf( '%s/tags', str_replace( '//github.com/', '//api.github.com/repos/', rtrim( $item_details['GitHub URI'], '/' ) ) ) 
-					);
+				$to_check[ $item ] = $item_details;
 
 		print_r($to_check);
 
+		foreach ( $to_check as $item => $item_details ) {
+			$api_response = wp_remote_get( 
+					sprintf( 
+						'%s/tags', 
+						str_replace( '//github.com/', '//api.github.com/repos/', rtrim( $item_details['GitHub URI'], '/' ) ) 
+					) 
+				);
+
+			$response_json = json_decode( wp_remote_retrieve_body( $api_response ), true );
+
+			//if ( is_wp_error( $raw_response ) || 200 != wp_remote_retrieve_response_code( $raw_response ) )
+			if ( $response_json )
+				print_r($response_json);
+		}
+		die;
 		return $updates;
 	}
 
