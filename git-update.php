@@ -125,7 +125,7 @@ class GitUpdate {
 				continue;
 
 			foreach ( $response_json as $tag )
-				//if ( version_compare( $tag['name'], $item_details['Version'], '>' ) )
+				if ( version_compare( $tag['name'], $item_details['Version'], '>' ) )
 					$updates->response[ $item ] = (object) array(
 							'new_version' => $tag['name'],
 							'slug' => $item, //dirname( $item ),
