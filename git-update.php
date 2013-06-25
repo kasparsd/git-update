@@ -5,11 +5,12 @@ Plugin URI: https://github.com/kasparsd/git-update
 GitHub URI: https://github.com/kasparsd/git-update
 Description: Provides automatic updates for themes and plugins hosted at GitHub.
 Author: Kaspars Dambis
-Version: 1.2.3
+Version: 1.2.4
 */
 
 
 new GitUpdate;
+
 
 class GitUpdate {
 
@@ -23,7 +24,7 @@ class GitUpdate {
 
 
 	function GitUpdate() {
-		
+
 		// Use GitUpdate::$instance to interact with me
 		self::$instance = $this;
 
@@ -62,7 +63,7 @@ class GitUpdate {
 	 * @return object          Modified transient with update responses from our APIs
 	 */
 	function update_check_themes( $updates ) {
-		
+
 		// Run only after WP has done its own API check
 		if ( empty( $updates->checked ) )
 			return $updates;
@@ -70,6 +71,7 @@ class GitUpdate {
 		return $this->update_check( $updates, $this->get_themes() );
 
 	}
+
 
 	/**
 	 * Check for plugin updates
@@ -97,9 +99,9 @@ class GitUpdate {
 
 		$to_check = array();
 
-		// Bail out if we did this already
-		if ( isset( $updates->git_update_checked ) )
-			return $updates;
+		// Run only once an hour. This shouldn't be necessary but some other plugins might call us.
+		// if ( ! isset( $updates->last_checked ) || ( time() - $updates->last_checked ) < HOUR_IN_SECONDS )
+		//	return $updates;
 
 		// Filter out plugins/themes with known headers
 		foreach ( $extensions as $item => $item_details )
@@ -136,9 +138,6 @@ class GitUpdate {
 							'url' => $item_details['PluginURI']
 						);
 		}
-
-		// Make sure we run this only once per admin request
-		$updates->git_update_checked = true;
 		
 		return $updates;
 	}
@@ -187,8 +186,7 @@ class GitUpdate {
 
 
 	function maybe_move_github_folder( $true, $hook_extra, $result ) {
-		global $wp_filesystem;
-		
+		// global $wp_filesystem;
 		// print_r( array( $result, $hook_extra ) );
 
 		return $true;
