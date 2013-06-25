@@ -32,6 +32,8 @@ class GitUpdate {
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'update_check_plugins' ) );
 		add_filter( 'pre_set_site_transient_update_themes', array( $this, 'update_check_themes' ) );
 
+		add_filter( 'upgrader_post_install', array( $this, 'maybe_move_github_folder' ), 10, 3 );
+
 	}
 
 
@@ -182,6 +184,15 @@ class GitUpdate {
 				$themes[ $theme->get_template() ][ $header_slug ] = $theme->get( $header_slug );
 
 		return $themes;
+	}
+
+
+	function maybe_move_github_folder( $true, $hook_extra, $result ) {
+		global $wp_filesystem;
+
+		print_r( array( $result, $hook_extra ) );
+
+		return $true;
 	}
 
 }
