@@ -1,1 +1,1 @@
-# Automatic Theme/Plugin Updates from GitHub
+# Automatic Updates for Themes and Plugins Hosted on GitHub
