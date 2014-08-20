@@ -5,11 +5,11 @@ Plugin URI: https://github.com/kasparsd/git-update
 GitHub URI: https://github.com/kasparsd/git-update
 Description: Provides automatic updates for themes and plugins hosted at GitHub.
 Author: Kaspars Dambis
-Version: 1.2.5
+Version: 1.3
 */
 
 
-new GitUpdate;
+GitUpdate::instance();
 
 
 class GitUpdate {
@@ -23,10 +23,7 @@ class GitUpdate {
 	);
 
 
-	function GitUpdate() {
-
-		// Use GitUpdate::$instance to interact with me
-		self::$instance = $this;
+	private function __construct() {
 
 		add_filter( 'extra_theme_headers', array( $this, 'enable_gitupdate_headers' ) );
 		add_filter( 'extra_plugin_headers', array( $this, 'enable_gitupdate_headers' ) );
@@ -35,15 +32,21 @@ class GitUpdate {
 		add_filter( 'pre_set_site_transient_update_themes', array( $this, 'update_check_themes' ) );
 
 		add_action( 'core_upgrade_preamble', array( $this, 'show_gitupdate_log' ) );
+		//add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), 10, 3 );
 
 	}
 
 
-	/**
-	 * Enable custom update URI headers in theme and plugin headers
-	 * @param  array $headers Other custom headers
-	 * @return array          Our custom headers
-	 */
+	public static function instance() {
+
+		if ( ! self::$instance )
+			self::$instance = new self();
+
+		return self::$instance;
+
+	}
+
+
 	function enable_gitupdate_headers( $headers ) {
 
 		foreach ( $this->git_uris as $uri )
@@ -55,11 +58,6 @@ class GitUpdate {
 	}
 
 
-	/**
-	 * Check for theme updates
-	 * @param  object $updates Update transient
-	 * @return object          Modified transient with update responses from our APIs
-	 */
 	function update_check_themes( $updates ) {
 
 		// Run only after WP has done its own API check
@@ -71,11 +69,6 @@ class GitUpdate {
 	}
 
 
-	/**
-	 * Check for plugin updates
-	 * @param  object $updates Update transient
-	 * @return object          Modified transient with update responses from our APIs
-	 */
 	function update_check_plugins( $updates ) {
 
 		// Run only after WP has done its own API check
@@ -87,57 +80,31 @@ class GitUpdate {
 	}
 
 
-	/**
-	 * Check for updates from external APIs
-	 * @param  object $updates    Update transient from WP core
-	 * @param  array $extensions  Available plugins or themes
-	 * @return object             Updated transient with information from our APIs
-	 */
 	function update_check( $updates, $extensions ) {
 
 		$to_check = array();
 
-		// Run only once an hour. This shouldn't be necessary but some other plugins might call us.
-		//if ( ! isset( $updates->last_checked ) || ( time() - $updates->last_checked ) < 60 ) // HOUR_IN_SECONDS
-		//	return $updates;
-
 		// Filter out plugins/themes with known headers
 		foreach ( $extensions as $item => $item_details )
 			foreach ( $this->git_uris as $uri )
-				if ( ! empty( $item_details[ $uri['header'] ] ) )
+				if ( isset( $item_details[ $uri['header'] ] ) && ! empty( $item_details[ $uri['header'] ] ) )
 					$to_check[ $item ] = $item_details;
 
 		if ( empty( $to_check ) )
 			return $updates;
 
 		foreach ( $to_check as $item => $item_details ) {
-			$api_response = wp_remote_get( 
-					sprintf( 
-						'%s/tags', 
-						str_replace( '//github.com/', '//api.github.com/repos/', rtrim( $item_details['GitHub URI'], '/' ) ) 
-					) 
+
+			$url = sprintf(
+					'%s/tags', 
+					str_replace( '//github.com/', '//api.github.com/repos/', rtrim( $item_details['GitHub URI'], '/' ) ) 
 				);
 
-			// Check if API responded correctly. Log as error, if not.
-			if ( is_wp_error( $api_response ) || wp_remote_retrieve_response_code( $api_response ) != 200 ) {
+			$api_response = wp_remote_get( $url );
 
-				$logs = (array) get_site_option( 'git-update-response-error', array() );
-				
-				// Log only 10 latest error messages
-				array_splice( $logs, 20 );
-
-				// Prepend current error message on top
-				array_unshift(
-						$logs,
-						array(
-							'item' =>  $item,
-							'time' => time(), 
-							'response' => $api_response
-						)
-					);
-
-				update_site_option( 'git-update-response-error', $logs );
-				
+			// Log errors
+			if ( is_wp_error( $api_response ) || 200 != wp_remote_retrieve_response_code( $api_response ) ) {
+				update_site_option( 'git-update-error', array( $item, $item_details, $api_response ) );
 				continue;
 			}
 
@@ -152,20 +119,18 @@ class GitUpdate {
 					$updates->response[ $item ] = (object) array(
 							'new_version' => $tag['name'],
 							'slug' => dirname( $item ),
-							'package' => $tag['zipball_url'],
-							'url' => $item_details['PluginURI']
+							'package' => $tag['zipball_url']
 						);
 		}
-		
+
 		return $updates;
+
 	}
 
 
-	/**
-	 * Make this return the same structure as get_plugins()
-	 * @return array Available themes and their meta data
-	 */
+	// Make this return the same structure as get_plugins()
 	function get_themes() {
+
 		$themes = array();
 
 		$theme_headers = array(
@@ -200,46 +165,41 @@ class GitUpdate {
 				$themes[ $theme->get_template() ][ $header_slug ] = $theme->get( $header_slug );
 
 		return $themes;
+
+	}
+
+
+	function upgrader_post_install( $res, $extra, $result ) {
+
+		global $wp_filesystem;
+
+		if ( ! isset( $extra['plugin'] ) || empty( $extra['plugin'] ) )
+			return $res;
+
+		// Get the plugin basename
+		$plugin = $extra['plugin'];
+
+		$plugin_dir = sprintf( '%s/%s', WP_PLUGIN_DIR, dirname( $plugin ) );
+
+		// Don't move the plugin if it's in the correct directory already
+		if ( $result['destination'] == $plugin_dir )
+			return $res;
+
+		$wp_filesystem->move( $result['destination'], $plugin_dir );
+		$result['destination'] = $plugin_dir;
+
+		return activate_plugin( sprintf( '%s/%s', WP_PLUGIN_DIR, $plugin ) );
+
 	}
 
 
 	function show_gitupdate_log() {
 
-		$log_rows = array();
-		$log = get_site_option( 'git-update-response-error', array() );
-
-		if ( empty( $log ) || ! is_array( $log ) )
-			return;
-
-		foreach ( $log as $log_item )
-			$log_rows[] = sprintf( 
-					'<tr>
-						<td><strong>%s</strong><br/>%s</td>
-						<td><pre>%s</pre></td>
-					</tr>',
-					$log_item['item'],
-					date( 'r', $log_item['time'] ),
-					print_r( $log_item['response']['body'], true )
-				);
-
-		if ( empty( $log_rows ) )
-			$log_rows[] = sprintf( 
-					'<tr>
-						<td colspan="2">%s</td>
-					</tr>',
-					__( 'No logs found.', 'git-update' )
-				);
-
-		printf( 
-			'<h3>%s</h3>
-			<table class="widefat">
-				%s
-			</table>',
-			__( 'Git Update Error Logs', 'git-update' ),
-			implode( '', $log_rows ) 
-		);
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG )
+			printf( '<h3>Git Update Logs</h3><pre>%s</pre>', print_r( get_site_option( 'git-update-error' ), true ) );
 
 	}
+
 
 }
 
