@@ -5,7 +5,7 @@ Plugin URI: https://github.com/kasparsd/git-update
 GitHub URI: https://github.com/kasparsd/git-update
 Description: Provides automatic updates for themes and plugins hosted at GitHub.
 Author: Kaspars Dambis
-Version: 1.3
+Version: 1.3.1
 */
 
 
@@ -32,7 +32,7 @@ class GitUpdate {
 		add_filter( 'pre_set_site_transient_update_themes', array( $this, 'update_check_themes' ) );
 
 		add_action( 'core_upgrade_preamble', array( $this, 'show_gitupdate_log' ) );
-		//add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), 10, 3 );
+		add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), 10, 3 );
 
 	}
 
@@ -169,6 +169,7 @@ class GitUpdate {
 	}
 
 
+	// TODO: Make this work for themes too!
 	function upgrader_post_install( $res, $extra, $result ) {
 
 		global $wp_filesystem;
