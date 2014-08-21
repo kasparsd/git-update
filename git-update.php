@@ -138,6 +138,8 @@ class GitUpdate {
 					elseif ( isset( $item_details['PluginURI'] ) )
 						$updates->response[ $item ] = (object) $response;
 
+					break;
+
 				}
 
 			}
