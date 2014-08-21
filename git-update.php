@@ -255,8 +255,8 @@ class GitUpdate {
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG )
 			printf( 
-				'<h3>Git Update Logs</h3>
-				<pre style="overflow:auto;width:100%;">%s</pre>', 
+				'<h3>Git Update Error</h3>
+				<pre style="overflow:auto;width:100%%;">%s</pre>', 
 				esc_html( print_r( get_site_option( 'git-update-error' ), true ) )
 			);
 
