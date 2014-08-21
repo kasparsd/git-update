@@ -31,8 +31,8 @@ class GitUpdate {
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'update_check_plugins' ) );
 		add_filter( 'pre_set_site_transient_update_themes', array( $this, 'update_check_themes' ) );
 
-		add_action( 'core_upgrade_preamble', array( $this, 'show_gitupdate_log' ) );
 		add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), 10, 3 );
+		add_action( 'core_upgrade_preamble', array( $this, 'show_gitupdate_log' ) );
 
 	}
 
@@ -95,12 +95,21 @@ class GitUpdate {
 
 		foreach ( $to_check as $item => $item_details ) {
 
+			// Don't re-check for updates
+			if ( isset( $updates->response[ $item ] ) )
+				continue;
+
 			$url = sprintf(
 					'%s/tags', 
 					str_replace( '//github.com/', '//api.github.com/repos/', rtrim( $item_details['GitHub URI'], '/' ) ) 
 				);
 
-			$api_response = wp_remote_get( $url );
+			$api_response = wp_remote_get( 
+					$url, 
+					array( 
+						'sslverify' => false 
+					) 
+				);
 
 			// Log errors
 			if ( is_wp_error( $api_response ) || 200 != wp_remote_retrieve_response_code( $api_response ) ) {
@@ -114,13 +123,25 @@ class GitUpdate {
 			if ( empty( $response_json ) || ! is_array( $response_json ) )
 				continue;
 
-			foreach ( $response_json as $tag )
-				if ( version_compare( $tag['name'], $item_details['Version'], '>' ) )
-					$updates->response[ $item ] = (object) array(
+			foreach ( $response_json as $tag ) {
+
+				if ( version_compare( $tag['name'], $item_details['Version'], '>' ) ) {
+
+					$response = array(
 							'new_version' => $tag['name'],
 							'slug' => dirname( $item ),
 							'package' => $tag['zipball_url']
 						);
+
+					if ( isset( $item_details['ThemeURI'] ) )
+						$updates->response[ $item ] = $response;
+					elseif ( isset( $item_details['PluginURI'] ) )
+						$updates->response[ $item ] = (object) $response;
+
+				}
+
+			}
+
 		}
 
 		return $updates;
@@ -169,27 +190,63 @@ class GitUpdate {
 	}
 
 
-	// TODO: Make this work for themes too!
+	// Move them back into the original folder
 	function upgrader_post_install( $res, $extra, $result ) {
 
 		global $wp_filesystem;
 
-		if ( ! isset( $extra['plugin'] ) || empty( $extra['plugin'] ) )
-			return $res;
+		$move = false;
 
-		// Get the plugin basename
-		$plugin = $extra['plugin'];
+		if ( isset( $extra['plugin'] ) )
+			$move = $this->upgrade_move_plugin( $extra['plugin'], $result );
+		
+		if ( isset( $extra['theme'] ) )
+			$move = $this->upgrade_move_theme( $extra['theme'], $result );
 
-		$plugin_dir = sprintf( '%s/%s', WP_PLUGIN_DIR, dirname( $plugin ) );
+		if ( is_wp_error( $move ) )
+			return $move;
 
-		// Don't move the plugin if it's in the correct directory already
-		if ( $result['destination'] == $plugin_dir )
-			return $res;
+		return $res;
 
-		$wp_filesystem->move( $result['destination'], $plugin_dir );
-		$result['destination'] = $plugin_dir;
+	}
 
-		return activate_plugin( sprintf( '%s/%s', WP_PLUGIN_DIR, $plugin ) );
+
+	function upgrade_move_plugin( $plugin, $result ) {
+
+		global $wp_filesystem;
+
+		$plugins_dir = trailingslashit( $wp_filesystem->wp_plugins_dir( $plugin ) );
+
+		// Don't move if it's in the correct directory already
+		if ( $result['destination'] == $plugins_dir )
+			return true;
+
+		$move = $wp_filesystem->move( $result['destination'], $plugins_dir );
+
+		if ( ! is_wp_error( $move ) )
+			return activate_plugin( $plugins_dir . $plugin );
+		else
+			return $move;
+
+	}
+
+
+	function upgrade_move_theme( $theme, $result ) {
+
+		global $wp_filesystem;
+
+		$themes_dir = trailingslashit( $wp_filesystem->wp_themes_dir( $theme ) );
+
+		// Don't move if it's in the correct directory already
+		if ( $result['destination'] == $themes_dir )
+			return true;
+
+		$move = $wp_filesystem->move( $result['destination'], $themes_dir );
+
+		if ( ! is_wp_error( $move ) )
+			return activate_theme( $themes_dir . $theme );
+		else
+			return $move;
 
 	}
 
@@ -197,7 +254,11 @@ class GitUpdate {
 	function show_gitupdate_log() {
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG )
-			printf( '<h3>Git Update Logs</h3><pre>%s</pre>', print_r( get_site_option( 'git-update-error' ), true ) );
+			printf( 
+				'<h3>Git Update Logs</h3>
+				<pre style="overflow:auto;width:100%;">%s</pre>', 
+				esc_html( print_r( get_site_option( 'git-update-error' ), true ) )
+			);
 
 	}
 
