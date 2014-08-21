@@ -31,7 +31,7 @@ class GitUpdate {
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'update_check_plugins' ) );
 		add_filter( 'pre_set_site_transient_update_themes', array( $this, 'update_check_themes' ) );
 
-		add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), 10, 3 );
+		add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), 5, 3 );
 		add_action( 'core_upgrade_preamble', array( $this, 'show_gitupdate_log' ) );
 
 	}
@@ -195,7 +195,10 @@ class GitUpdate {
 
 		global $wp_filesystem;
 
-		$move = false;
+		if ( is_wp_error( $res ) )
+			return $res;
+
+		$move = null;
 
 		if ( isset( $extra['plugin'] ) )
 			$move = $this->upgrade_move_plugin( $extra['plugin'], $result );
@@ -221,12 +224,7 @@ class GitUpdate {
 		if ( $result['destination'] == $plugins_dir )
 			return true;
 
-		$move = $wp_filesystem->move( $result['destination'], $plugins_dir );
-
-		if ( ! is_wp_error( $move ) )
-			return activate_plugin( $plugins_dir . $plugin );
-		else
-			return $move;
+		return $wp_filesystem->move( $result['destination'], $plugins_dir );
 
 	}
 
@@ -241,12 +239,7 @@ class GitUpdate {
 		if ( $result['destination'] == $themes_dir )
 			return true;
 
-		$move = $wp_filesystem->move( $result['destination'], $themes_dir );
-
-		if ( ! is_wp_error( $move ) )
-			return activate_theme( $themes_dir . $theme );
-		else
-			return $move;
+		return $wp_filesystem->move( $result['destination'], $themes_dir );
 
 	}
 
