@@ -5,7 +5,7 @@ Plugin URI: https://github.com/kasparsd/git-update
 GitHub URI: https://github.com/kasparsd/git-update
 Description: Provides automatic updates for themes and plugins hosted at GitHub.
 Author: Kaspars Dambis
-Version: 1.5
+Version: 1.5.1
 */
 
 
@@ -141,7 +141,7 @@ class GitUpdate {
 				if ( version_compare( $tag['name'], $item_details['Version'], '>' ) ) {
 
 					$package = $tag['zipball_url'];
-					
+
 					/*$package = str_replace( 
 							'https://api.github.com/repos/', 
 							'http://github.kaspars.net/', 
