@@ -5,7 +5,7 @@ Plugin URI: https://github.com/kasparsd/git-update
 GitHub URI: https://github.com/kasparsd/git-update
 Description: Provides automatic updates for themes and plugins hosted at GitHub.
 Author: Kaspars Dambis
-Version: 1.5.1
+Version: 1.5.2
 */
 
 
@@ -31,7 +31,6 @@ class GitUpdate {
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'update_check_plugins' ) );
 		add_filter( 'pre_set_site_transient_update_themes', array( $this, 'update_check_themes' ) );
 
-		add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), 5, 3 );
 		add_action( 'core_upgrade_preamble', array( $this, 'show_gitupdate_log' ) );
 
 	}
@@ -152,7 +151,7 @@ class GitUpdate {
 							'new_version' => $tag['name'],
 							'slug' => dirname( $item ),
 							'package' => $package,
-							'url' => $tag['url']
+							'url' => $tag['commit']['url']
 						);
 
 					if ( isset( $item_details['ThemeURI'] ) )
@@ -214,60 +213,6 @@ class GitUpdate {
 	}
 
 
-	// Move them back into the original folder
-	function upgrader_post_install( $res, $extra, $result ) {
-
-		global $wp_filesystem;
-
-		if ( is_wp_error( $res ) )
-			return $res;
-
-		$move = null;
-
-		if ( isset( $extra['plugin'] ) )
-			$move = $this->upgrade_move_plugin( $extra['plugin'], $result );
-		
-		if ( isset( $extra['theme'] ) )
-			$move = $this->upgrade_move_theme( $extra['theme'], $result );
-
-		if ( is_wp_error( $move ) )
-			return $move;
-
-		return $res;
-
-	}
-
-
-	function upgrade_move_plugin( $plugin, $result ) {
-
-		global $wp_filesystem;
-
-		$plugin_dir = trailingslashit( $wp_filesystem->wp_plugins_dir() . dirname( $plugin ) );
-
-		// Don't move if it's in the correct directory already
-		if ( $result['destination'] == $plugin_dir )
-			return false;
-
-		return $wp_filesystem->move( $result['destination'], $plugin_dir );
-
-	}
-
-
-	function upgrade_move_theme( $theme, $result ) {
-
-		global $wp_filesystem;
-
-		$theme_dir = trailingslashit( $wp_filesystem->wp_themes_dir() . $theme );
-
-		// Don't move if it's in the correct directory already
-		if ( $result['destination'] == $theme_dir )
-			return false;
-
-		return $wp_filesystem->move( $result['destination'], $theme_dir );
-
-	}
-
-
 	function show_gitupdate_log() {
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG )
@@ -320,21 +265,6 @@ class UpdateKeepFolder {
 	}
 
 
-	// Re-active a plugin that was active before
-	function upgrader_post_install( $res, $extra, $result ) {
-
-		if ( is_wp_error( $res ) )
-			return $res;
-
-		if ( isset( $extra['plugin'] ) && $this->was_active( $extra['plugin'] ) )
-			if ( ! is_plugin_active( $extra['plugin'] ) )
-				return activate_plugin( $extra['plugin'], null, $this->was_active( $extra['plugin'], 'network' ), true );
-		
-		return $res;
-
-	}
-
-
 	// Store active items
 	function upgrader_pre_install( $return, $item ) {
 
@@ -373,6 +303,68 @@ class UpdateKeepFolder {
 			return $this->active_items[ $item ][ $param ];
 
 		return $was_active;
+
+	}
+
+
+	// Move them back into the original folder
+	function upgrader_post_install( $res, $extra, $result ) {
+
+		global $wp_filesystem;
+
+		if ( is_wp_error( $res ) )
+			return $res;
+
+		$move = null;
+
+		if ( isset( $extra['plugin'] ) )
+			$move = $this->upgrade_move_plugin( $extra['plugin'], $result );
+		
+		if ( isset( $extra['theme'] ) )
+			$move = $this->upgrade_move_theme( $extra['theme'], $result );
+
+		if ( is_wp_error( $move ) )
+			return $move;
+
+		return $res;
+
+	}
+
+
+	function upgrade_move_plugin( $plugin, $result ) {
+
+		global $wp_filesystem;
+
+		$plugin_dir = trailingslashit( $wp_filesystem->wp_plugins_dir() . dirname( $plugin ) );
+
+		// Don't move if it's in the correct directory already
+		if ( $result['destination'] == $plugin_dir )
+			return false;
+
+		$move = $wp_filesystem->move( $result['destination'], $plugin_dir );
+
+		if ( is_wp_error( $move ) )
+			return $move;
+
+		if ( $this->was_active( $plugin ) && ! is_plugin_active( $plugin ) )
+			return activate_plugin( $plugin, null, $this->was_active( $plugin, 'network' ), true );
+
+		return true;
+
+	}
+
+
+	function upgrade_move_theme( $theme, $result ) {
+
+		global $wp_filesystem;
+
+		$theme_dir = trailingslashit( $wp_filesystem->wp_themes_dir() . $theme );
+
+		// Don't move if it's in the correct directory already
+		if ( $result['destination'] == $theme_dir )
+			return false;
+
+		return $wp_filesystem->move( $result['destination'], $theme_dir );
 
 	}
 
