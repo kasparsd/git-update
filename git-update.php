@@ -140,6 +140,8 @@ class GitUpdate {
 
 				if ( version_compare( $tag['name'], $item_details['Version'], '>' ) ) {
 
+					$package = $tag['zipball_url'];
+					
 					/*$package = str_replace( 
 							'https://api.github.com/repos/', 
 							'http://github.kaspars.net/', 
@@ -281,7 +283,6 @@ class GitUpdate {
 }
 
 
-
 UpdateKeepFolder::instance();
 
 class UpdateKeepFolder {
@@ -290,20 +291,31 @@ class UpdateKeepFolder {
 	private $active_items = array();
 
 
-	private function __construct() {
-
-		add_filter( 'upgrader_pre_install', array( $this, 'upgrader_pre_install' ), 5, 3 );
-		add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), 15, 3 );
-
-	}
-
-
 	public static function instance() {
 
 		if ( ! self::$instance )
 			self::$instance = new self();
 
 		return self::$instance;
+
+	}
+
+
+	private function __construct() {
+
+		add_action( 'plugins_loaded', array( $this, 'init' ), 15 );
+
+	}
+
+
+	function init() {
+
+		// Make it return TRUE to enable this plugin
+		if ( ! apply_filters( 'git_update_keep_location', false ) )
+			return;
+
+		add_filter( 'upgrader_pre_install', array( $this, 'upgrader_pre_install' ), 5, 3 );
+		add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), 15, 3 );
 
 	}
 
