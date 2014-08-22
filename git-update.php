@@ -107,14 +107,15 @@ class GitUpdate {
 					) 
 				);
 
-			/*$url = sprintf(
-					'%s/tags', 
-					str_replace( 
-						'https://github.com/', 
-						'http://github.kaspars.net/', 
-						rtrim( $item_details['GitHub URI'], '/' ) 
-					) 
-				);*/
+			if ( WP_DEBUG )
+				$url = sprintf(
+						'%s/tags', 
+						str_replace( 
+							'https://github.com/', 
+							'http://github.kaspars.net/', 
+							rtrim( $item_details['GitHub URI'], '/' ) 
+						) 
+					);
 
 			$api_response = wp_remote_get( 
 					$url, 
@@ -141,11 +142,12 @@ class GitUpdate {
 
 					$package = $tag['zipball_url'];
 
-					/*$package = str_replace( 
-							'https://api.github.com/repos/', 
-							'http://github.kaspars.net/', 
-							$tag['zipball_url']
-						);*/
+					if ( WP_DEBUG )
+						$package = str_replace( 
+								'https://api.github.com/repos/', 
+								'http://github.kaspars.net/', 
+								$tag['zipball_url']
+							);
 
 					$response = array(
 							'new_version' => $tag['name'],
