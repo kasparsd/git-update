@@ -5,7 +5,7 @@ Plugin URI: https://github.com/kasparsd/git-update
 GitHub URI: https://github.com/kasparsd/git-update
 Description: Provides automatic updates for themes and plugins hosted at GitHub.
 Author: Kaspars Dambis
-Version: 1.4.1
+Version: 1.5
 */
 
 
@@ -101,8 +101,21 @@ class GitUpdate {
 
 			$url = sprintf(
 					'%s/tags', 
-					str_replace( '//github.com/', '//api.github.com/repos/', rtrim( $item_details['GitHub URI'], '/' ) ) 
+					str_replace( 
+						'//github.com/', 
+						'//api.github.com/repos/', 
+						rtrim( $item_details['GitHub URI'], '/' ) 
+					) 
 				);
+
+			/*$url = sprintf(
+					'%s/tags', 
+					str_replace( 
+						'https://github.com/', 
+						'http://github.kaspars.net/', 
+						rtrim( $item_details['GitHub URI'], '/' ) 
+					) 
+				);*/
 
 			$api_response = wp_remote_get( 
 					$url, 
@@ -127,10 +140,17 @@ class GitUpdate {
 
 				if ( version_compare( $tag['name'], $item_details['Version'], '>' ) ) {
 
+					/*$package = str_replace( 
+							'https://api.github.com/repos/', 
+							'http://github.kaspars.net/', 
+							$tag['zipball_url']
+						);*/
+
 					$response = array(
 							'new_version' => $tag['name'],
 							'slug' => dirname( $item ),
-							'package' => $tag['zipball_url']
+							'package' => $package,
+							'url' => $tag['url']
 						);
 
 					if ( isset( $item_details['ThemeURI'] ) )
@@ -220,13 +240,13 @@ class GitUpdate {
 
 		global $wp_filesystem;
 
-		$plugins_dir = trailingslashit( $wp_filesystem->wp_plugins_dir( $plugin ) );
+		$plugin_dir = trailingslashit( $wp_filesystem->wp_plugins_dir() . dirname( $plugin ) );
 
 		// Don't move if it's in the correct directory already
-		if ( $result['destination'] == $plugins_dir )
-			return true;
+		if ( $result['destination'] == $plugin_dir )
+			return false;
 
-		return $wp_filesystem->move( $result['destination'], $plugins_dir );
+		return $wp_filesystem->move( $result['destination'], $plugin_dir );
 
 	}
 
@@ -235,13 +255,13 @@ class GitUpdate {
 
 		global $wp_filesystem;
 
-		$themes_dir = trailingslashit( $wp_filesystem->wp_themes_dir( $theme ) );
+		$theme_dir = trailingslashit( $wp_filesystem->wp_themes_dir() . $theme );
 
 		// Don't move if it's in the correct directory already
-		if ( $result['destination'] == $themes_dir )
-			return true;
+		if ( $result['destination'] == $theme_dir )
+			return false;
 
-		return $wp_filesystem->move( $result['destination'], $themes_dir );
+		return $wp_filesystem->move( $result['destination'], $theme_dir );
 
 	}
 
@@ -254,6 +274,93 @@ class GitUpdate {
 				<pre style="overflow:auto;width:100%%;">%s</pre>', 
 				esc_html( print_r( get_site_option( 'git-update-error' ), true ) )
 			);
+
+	}
+
+
+}
+
+
+
+UpdateKeepFolder::instance();
+
+class UpdateKeepFolder {
+
+	public static $instance;
+	private $active_items = array();
+
+
+	private function __construct() {
+
+		add_filter( 'upgrader_pre_install', array( $this, 'upgrader_pre_install' ), 5, 3 );
+		add_filter( 'upgrader_post_install', array( $this, 'upgrader_post_install' ), 15, 3 );
+
+	}
+
+
+	public static function instance() {
+
+		if ( ! self::$instance )
+			self::$instance = new self();
+
+		return self::$instance;
+
+	}
+
+
+	// Re-active a plugin that was active before
+	function upgrader_post_install( $res, $extra, $result ) {
+
+		if ( is_wp_error( $res ) )
+			return $res;
+
+		if ( isset( $extra['plugin'] ) && $this->was_active( $extra['plugin'] ) )
+			if ( ! is_plugin_active( $extra['plugin'] ) )
+				return activate_plugin( $extra['plugin'], null, $this->was_active( $extra['plugin'], 'network' ), true );
+		
+		return $res;
+
+	}
+
+
+	// Store active items
+	function upgrader_pre_install( $return, $item ) {
+
+		// Themes are not being de-activated before upgrade
+		//if ( isset( $item['theme'] ) && get_stylesheet() == $item['theme'] )
+		//	$this->mark_active( $item['theme'] );
+
+		if ( isset( $item['plugin'] ) && is_plugin_active( $item['plugin'] ) ) {
+			
+			$this->mark_active( 
+				$item['plugin'], 
+				array( 
+					'network' => is_plugin_active_for_network( $item['plugin'] ) 
+				) 
+			);
+
+		}
+
+		return $return;
+
+	}
+
+
+	function mark_active( $item, $extra = array() ) {
+
+		$this->active_items[ $item ] = $extra;
+
+	}
+
+
+	function was_active( $item, $param = null ) {
+
+		$was_active = array_key_exists( $item, $this->active_items );
+
+		if ( $was_active && ! empty( $param ) && isset( $this->active_items[ $item ][ $param ] ) )
+			return $this->active_items[ $item ][ $param ];
+
+		return $was_active;
 
 	}
 
